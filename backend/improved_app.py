@@ -11,6 +11,7 @@ import time
 import csv
 import math
 import os
+import ast
 from typing import Dict, List, Tuple
 import logging
 
@@ -54,40 +55,34 @@ def load_actual_geojson():
     except Exception as e:
         logger.error(f"Error loading stations: {e}")
     
-    # Load tracks (simplified - take first few features due to size)
+    # Load tracks from GeoJSON
     tracks_file = os.path.join(os.path.dirname(__file__), '..', 'bangalore_mysore_tracks.geojson')
     try:
         with open(tracks_file, 'r', encoding='utf-8') as f:
             tracks_data = json.load(f)
             
-        # Process tracks and create main route
-        main_route_coords = []
-        track_segments = []
-        
-        # Extract coordinates from all track features
-        for i, feature in enumerate(tracks_data['features'][:50]):  # Limit to first 50 for performance
+        # Process all track features
+        track_count = 0
+        for i, feature in enumerate(tracks_data['features']):
             if feature['geometry']['type'] == 'LineString':
                 coords = feature['geometry']['coordinates']
-                track_segments.extend(coords)
-                
-        # Create simplified main route from SBC to MYS
-        if actual_stations:
-            sbc_coords = [actual_stations['SBC']['lon'], actual_stations['SBC']['lat']]
-            mys_coords = [actual_stations['MYS']['lon'], actual_stations['MYS']['lat']]
-            
-            # Create interpolated route
-            main_route_coords = create_interpolated_route(sbc_coords, mys_coords, track_segments)
+                if len(coords) >= 2:  # Valid track segment
+                    track_id = f"track_{i}"
+                    track_type = feature['properties'].get('railway', 'rail')
+                    service = feature['properties'].get('service', 'main')
+                    
+                    actual_tracks[track_id] = {
+                        'name': f'Track {i+1}',
+                        'coordinates': coords,
+                        'track_type': track_type,
+                        'service': service,
+                        'capacity': 1,
+                        'segment': f'Segment-{i+1}',
+                        'length_km': calculate_route_length(coords)
+                    }
+                    track_count += 1
         
-        actual_tracks['main_route'] = {
-            'name': 'SBC-MYS Main Line',
-            'coordinates': main_route_coords,
-            'track_type': 'main',
-            'capacity': 1,
-            'segment': 'SBC-MYS',
-            'length_km': calculate_route_length(main_route_coords)
-        }
-        
-        logger.info(f"Created main route with {len(main_route_coords)} points")
+        logger.info(f"Loaded {track_count} track segments from GeoJSON")
         
     except Exception as e:
         logger.error(f"Error loading tracks: {e}")
@@ -128,6 +123,102 @@ def create_interpolated_route(start_coords, end_coords, track_points):
     route.append(end_coords)
     return route
 
+def create_train_route(stops):
+    """Create a route based on train stops using actual station coordinates and track data"""
+    if not stops or not actual_stations:
+        return []
+    
+    route = []
+    
+    # Add coordinates for each stop in order
+    for stop_code in stops:
+        if stop_code in actual_stations:
+            station = actual_stations[stop_code]
+            route.append([station['lon'], station['lat']])
+        else:
+            logger.warning(f"Station {stop_code} not found in actual stations")
+    
+    # If we have track data, try to interpolate between stations
+    if len(route) >= 2 and actual_tracks:
+        enhanced_route = []
+        
+        for i in range(len(route) - 1):
+            start_coord = route[i]
+            end_coord = route[i + 1]
+            
+            # Add start coordinate
+            enhanced_route.append(start_coord)
+            
+            # Find track segments that might connect these stations
+            connecting_points = find_connecting_track_points(start_coord, end_coord)
+            enhanced_route.extend(connecting_points)
+        
+        # Add final coordinate
+        enhanced_route.append(route[-1])
+        return enhanced_route
+    
+    return route
+
+def find_connecting_track_points(start_coord, end_coord):
+    """Find track points that lie between two stations"""
+    connecting_points = []
+    
+    # Calculate bounding box between stations
+    min_lon = min(start_coord[0], end_coord[0]) - 0.01
+    max_lon = max(start_coord[0], end_coord[0]) + 0.01
+    min_lat = min(start_coord[1], end_coord[1]) - 0.01
+    max_lat = max(start_coord[1], end_coord[1]) + 0.01
+    
+    # Find track points within this bounding box
+    for track in actual_tracks.values():
+        if track['coordinates']:
+            for coord in track['coordinates']:
+                lon, lat = coord[0], coord[1]
+                if min_lon <= lon <= max_lon and min_lat <= lat <= max_lat:
+                    # Calculate distance from the direct line between stations
+                    distance_to_line = point_to_line_distance(coord, start_coord, end_coord)
+                    if distance_to_line < 0.02:  # Within ~2km of direct line
+                        connecting_points.append(coord)
+    
+    # Sort points by distance from start
+    connecting_points.sort(key=lambda p: 
+        math.sqrt((p[0] - start_coord[0])**2 + (p[1] - start_coord[1])**2))
+    
+    # Return a subset to avoid too many points
+    return connecting_points[::max(1, len(connecting_points) // 5)]
+
+def point_to_line_distance(point, line_start, line_end):
+    """Calculate distance from a point to a line segment"""
+    px, py = point[0], point[1]
+    x1, y1 = line_start[0], line_start[1]
+    x2, y2 = line_end[0], line_end[1]
+    
+    # Calculate the distance
+    A = px - x1
+    B = py - y1
+    C = x2 - x1
+    D = y2 - y1
+    
+    dot = A * C + B * D
+    len_sq = C * C + D * D
+    
+    if len_sq == 0:
+        return math.sqrt(A * A + B * B)
+    
+    param = dot / len_sq
+    
+    if param < 0:
+        xx, yy = x1, y1
+    elif param > 1:
+        xx, yy = x2, y2
+    else:
+        xx = x1 + param * C
+        yy = y1 + param * D
+    
+    dx = px - xx
+    dy = py - yy
+    return math.sqrt(dx * dx + dy * dy)
+
 def calculate_route_length(coordinates):
     """Calculate route length in km"""
     total_length = 0
@@ -156,16 +247,27 @@ def load_train_data():
         with open(csv_file, 'r') as f:
             reader = csv.DictReader(f)
             for row in reader:
-                trains_data[row['train_id']] = {
-                    'train_id': row['train_id'],
-                    'dep_time': int(row['dep_time']),
-                    'arr_time': int(row['arr_time']),
-                    'speed_kmh': int(row['speed_kmh']),
-                    'stops': eval(row['stops']),
-                    'train_type': row['train_type'],
-                    'priority': row['priority'],
-                    'delay': 0  # Added delay tracking
-                }
+                try:
+                    # Safely parse the stops list
+                    stops_str = row['stops'].strip()
+                    if stops_str.startswith('[') and stops_str.endswith(']'):
+                        stops = ast.literal_eval(stops_str)
+                    else:
+                        stops = [s.strip().strip("'") for s in stops_str.split(',')]
+                    
+                    trains_data[row['train_id']] = {
+                        'train_id': row['train_id'],
+                        'dep_time': int(row['dep_time']),
+                        'arr_time': int(row['arr_time']),
+                        'speed_kmh': int(row['speed_kmh']),
+                        'stops': stops,
+                        'train_type': row['train_type'],
+                        'priority': row['priority'],
+                        'delay': 0  # Added delay tracking
+                    }
+                except (ValueError, SyntaxError) as e:
+                    logger.error(f"Error parsing train {row['train_id']}: {e}")
+                    continue
         logger.info(f"Loaded {len(trains_data)} trains")
     except Exception as e:
         logger.error(f"Error loading train data: {e}")
@@ -177,11 +279,17 @@ def calculate_position(train_id, current_time):
     
     train = trains_data[train_id]
     
-    # Get main route coordinates
-    if 'main_route' not in actual_tracks:
+    # Get track coordinates - create a comprehensive route
+    if not actual_tracks or not actual_stations:
         return None
-        
-    route_coords = actual_tracks['main_route']['coordinates']
+    
+    # Create a route that connects all stations the train visits
+    route_coords = create_train_route(train['stops'])
+    
+    if not route_coords or len(route_coords) < 2:
+        # Fallback to first available track
+        first_track = list(actual_tracks.values())[0]
+        route_coords = first_track['coordinates']
     
     # Adjust for delays
     effective_dep_time = train['dep_time'] + train['delay']
@@ -416,7 +524,22 @@ def add_special_train():
 
 if __name__ == '__main__':
     print("Starting Railway DSS - Improved Backend...")
+    print("Loading GeoJSON data...")
     load_actual_geojson()
+    
+    print("Loading train schedules...")
     load_train_data()
     
+    print(f"✓ Loaded {len(actual_stations)} stations")
+    print(f"✓ Loaded {len(actual_tracks)} track segments") 
+    print(f"✓ Loaded {len(trains_data)} trains")
+    
+    if not actual_stations or not actual_tracks or not trains_data:
+        print("⚠️  Warning: Some data files may be missing or corrupted")
+        print("   Make sure you have:")
+        print("   - bangalore_mysore_stations.geojson")
+        print("   - bangalore_mysore_tracks.geojson") 
+        print("   - data/sbc_mys_schedules.csv")
+    
+    print("Starting Flask server on http://localhost:5000")
     app.run(host='0.0.0.0', port=5000, debug=False, threaded=True)

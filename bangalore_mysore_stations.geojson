@@ -42,6 +42,48 @@
         "platforms": 6,
         "dwell_time": 25
       }
+    },
+    {
+      "type": "Feature",
+      "geometry": { 
+        "type": "Point", 
+        "coordinates": [77.48, 12.88] 
+      },
+      "properties": { 
+        "name": "Kengeri",
+        "id": "kengeri",
+        "station_code": "Kengeri",
+        "platforms": 2,
+        "dwell_time": 10
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": { 
+        "type": "Point", 
+        "coordinates": [78.15, 12.98] 
+      },
+      "properties": { 
+        "name": "Bangarpet",
+        "id": "bangarpet",
+        "station_code": "Bangarpet",
+        "platforms": 2,
+        "dwell_time": 8
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": { 
+        "type": "Point", 
+        "coordinates": [77.2, 12.65] 
+      },
+      "properties": { 
+        "name": "Channapatna",
+        "id": "channapatna",
+        "station_code": "Channapatna",
+        "platforms": 2,
+        "dwell_time": 8
+      }
     }
   ]
 }
