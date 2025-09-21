@@ -292,11 +292,16 @@
 
         // Load data and setup
         async function init() {
-            await loadTracks();
-            await loadStations();
-            await loadTrainList();
-            setupEventListeners();
-            showNotification('Railway DSS loaded with real data!', 'success');
+            try {
+                await loadTracks();
+                await loadStations();
+                await loadTrainList();
+                setupEventListeners();
+                showNotification('Railway DSS loaded with real data!', 'success');
+            } catch (error) {
+                console.error('Error initializing Railway DSS:', error);
+                showNotification('Error loading simulation data. Please check if backend is running.', 'error');
+            }
         }
 
         async function loadTracks() {

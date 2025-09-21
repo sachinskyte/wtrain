@@ -1,9 +1,0 @@
-flask
-flask-socketio
-simpy
-pulp
-pandas
-numpy
-geopy
-shapely
-eventlet

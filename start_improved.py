@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Improved start script for Railway DSS
+Railway DSS - Improved Simulation
 Uses real GeoJSON data with enhanced features
 """
 
@@ -71,9 +71,9 @@ def start_improved_backend():
         return None
 
 def main():
-    print("=" * 60)
-    print("🚂 Railway DSS - Improved with Real Data")
-    print("=" * 60)
+    print("=" * 50)
+    print("🚂 Railway DSS - Simulation")
+    print("=" * 50)
     
     print("\n1. Checking files...")
     if not check_files():
@@ -95,24 +95,15 @@ def main():
     frontend_file = os.path.join(os.path.dirname(__file__), 'frontend', 'improved.html')
     webbrowser.open(f'file://{os.path.abspath(frontend_file)}')
     
-    print("\n" + "=" * 60)
-    print("🎉 Improved Railway DSS Started!")
-    print("=" * 60)
-    print("\n✨ NEW FEATURES:")
-    print("✓ Real OpenStreetMap track data")
-    print("✓ Actual station locations (SBC, Mandya, Mysore)")
-    print("✓ Variable simulation speed (0.1x to 5.0x)")
-    print("✓ Visible train movement with animations")
-    print("✓ Enhanced train information panels")
-    print("✓ Delay injection system")
-    print("✓ Special train addition")
-    print("✓ Focus on trains feature")
-    print("\n🎮 CONTROLS:")
-    print("• Use speed slider for faster/slower simulation")
-    print("• Click trains for detailed information")
-    print("• Add delays to test disruption handling")
-    print("• Insert special trains for what-if analysis")
-    print("• Use 'Focus Trains' to center map on active trains")
+    print("\n" + "=" * 50)
+    print("🎉 Railway DSS Started!")
+    print("=" * 50)
+    print("\n✨ FEATURES:")
+    print("✓ Real GeoJSON track data")
+    print("✓ Station locations (SBC, Mandya, Mysore)")
+    print("✓ Variable simulation speed")
+    print("✓ Train movement visualization")
+    print("✓ Delay injection & special trains")
     print("\nBackend: http://localhost:5000")
     print("Frontend: Opened in browser")
     print("\nPress Ctrl+C to stop")
